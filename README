@@ -84,9 +84,12 @@ Alternate parameter syntax
      use Sub::Parameters 'Param';
      sub illustration: WantParams {
          Param( my $foo );
-         Param( my $bar, 'rw' );
+         Param( my $bar = 'rw' );
          ...
      }
+
+    NOTE: This implementation is currently flawed for array/hash parameters,
+    and as such they don't currently work.
 
 TODO
     Think about positional @foo:Parameter slurp rather than @foo = []

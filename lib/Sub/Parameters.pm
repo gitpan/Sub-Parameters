@@ -8,16 +8,16 @@ use Carp qw(croak);
 BEGIN { require Attribute::Handlers; }
 
 our @EXPORT_OK = qw( Param );
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 sub import {
     my $self    = shift;
     my $callpkg = caller(0);
 
-    foreach my $symbol (@_) {
-        croak "'$symbol' not exported" unless grep { $symbol eq $_ } @EXPORT_OK;
+    foreach my $sym (@_) {
+        croak "'$sym' not exported" unless grep { $sym eq $_ } @EXPORT_OK;
         no strict 'refs';
-        *{"$callpkg\::$symbol"} = \&{"$self\::$symbol"};
+        *{"$callpkg\::$sym"} = \&{"$self\::$sym"};
     }
 
     Attribute::Handlers->import();
@@ -52,13 +52,18 @@ sub UNIVERSAL::WantParam : ATTR(CODE) {
 # you know, this would be a lot tidier if we could use ourselves
 # already...
 
-sub Param {
-    _Parameter(\$_[0], 2, $_[1]);
+sub Param ($) {
+    _Parameter(\$_[0], 2, $_[0]);
 }
 
 sub UNIVERSAL::Parameter : ATTR(VAR) {
-    # 5 is a magic number dependant on Attribute::Handlers
-    _Parameter($_[2], 5, $_[4]);
+    # 4 is a magic number dependant on Attribute::Handlers
+    my $level = 4;
+
+    local $Carp::CarpLevel = $level;
+    croak "your perl is not new enough to use the :Parameter form"
+      if $] < 5.007002;
+    _Parameter($_[2], $level + 1, $_[4]);
 }
 
 sub _Parameter {
@@ -70,10 +75,12 @@ sub _Parameter {
 
     my $frame = $stack[-1];
     croak "attempt to use a Parameter in an undecorated subroutine"
-      unless $sub == $frame->{sub};
+      unless $frame->{sub} && $sub == $frame->{sub};
 
     my %names = reverse %{ peek_sub( $sub ) };
-    my ($sigil, $name) = ($names{$referent} =~ /^([\$@%])(.*)$/);
+    my $fullname = $names{$referent}
+      or croak "couldn't find the name of $referent";
+    my ($sigil, $name) = ($fullname =~ /^([\$@%])(.*)$/);
 
     # set the offset based on the scheme
     my $offset;
@@ -213,9 +220,12 @@ for identifying parameters:
  use Sub::Parameters 'Param';
  sub illustration: WantParams {
      Param( my $foo );
-     Param( my $bar, 'rw' );
+     Param( my $bar = 'rw' );
      ...
  }
+
+NOTE: This implementation is currently flawed for array/hash
+parameters, and as such they don't currently work.
 
 =head1 TODO
 
