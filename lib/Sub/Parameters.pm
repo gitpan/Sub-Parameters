@@ -2,28 +2,16 @@ package Sub::Parameters;
 use strict;
 use warnings;
 use Hook::LexWrap;
-use PadWalker qw(peek_sub);
+use Devel::Caller qw(caller_cv called_with);
 use Devel::LexAlias qw(lexalias);
 use Carp qw(croak);
-BEGIN { require Attribute::Handlers; }
+use Attribute::Handlers;
 
+require Exporter;
+use base 'Exporter';
 our @EXPORT_OK = qw( Param );
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
-sub import {
-    my $self    = shift;
-    my $callpkg = caller(0);
-
-    foreach my $sym (@_) {
-        croak "'$sym' not exported" unless grep { $sym eq $_ } @EXPORT_OK;
-        no strict 'refs';
-        *{"$callpkg\::$sym"} = \&{"$self\::$sym"};
-    }
-
-    Attribute::Handlers->import();
-}
-
-my %wrapped;
 my @stack;
 
 sub UNIVERSAL::WantParam : ATTR(CODE) {
@@ -45,41 +33,43 @@ sub UNIVERSAL::WantParam : ATTR(CODE) {
                          args  => \@_ };
       },
       post => sub { pop  @stack };
-    $wrapped{ *$symbol{CODE} } = $sub;
 }
 
 
 # you know, this would be a lot tidier if we could use ourselves
 # already...
 
-sub Param ($) {
-    _Parameter(\$_[0], 2, $_[0]);
+sub Param {
+    local $Carp::CarpLevel = 3;
+    _Parameter(caller_cv(1), called_with(0), called_with(0,1), $_[0]);
 }
 
 sub UNIVERSAL::Parameter : ATTR(VAR) {
     # 4 is a magic number dependant on Attribute::Handlers
-    my $level = 4;
-
-    local $Carp::CarpLevel = $level;
+    local $Carp::CarpLevel = 4;
     croak "your perl is not new enough to use the :Parameter form"
       if $] < 5.007002;
-    _Parameter($_[2], $level + 1, $_[4]);
+
+    my $sub = caller_cv($Carp::CarpLevel);
+    my $referent = $_[2];
+
+    require PadWalker;
+    my %names = reverse %{ PadWalker::peek_sub( $sub ) };
+    my $fullname = $names{$referent}
+      or croak "couldn't find the name of $referent";
+
+    ++$Carp::CarpLevel;
+    _Parameter($sub, $referent, $fullname, $_[4]);
 }
 
 sub _Parameter {
-    my ($referent, $call_level, $data) = @_;
+    my ($sub, $referent, $fullname, $data) = @_;
     $data ||= 'copy';   # valid values: qw(copy rw)
-
-    local $Carp::CarpLevel = $call_level;
-    my $sub = $wrapped{ \&{ (caller $call_level)[3] } } || 0;
 
     my $frame = $stack[-1];
     croak "attempt to use a Parameter in an undecorated subroutine"
       unless $frame->{sub} && $sub == $frame->{sub};
 
-    my %names = reverse %{ peek_sub( $sub ) };
-    my $fullname = $names{$referent}
-      or croak "couldn't find the name of $referent";
     my ($sigil, $name) = ($fullname =~ /^([\$@%])(.*)$/);
 
     # set the offset based on the scheme
@@ -223,9 +213,6 @@ for identifying parameters:
      Param( my $bar = 'rw' );
      ...
  }
-
-NOTE: This implementation is currently flawed for array/hash
-parameters, and as such they don't currently work.
 
 =head1 TODO
 

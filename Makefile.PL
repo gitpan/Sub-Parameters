@@ -18,17 +18,16 @@ WriteMakefile(
                                  'Devel::LexAlias'     => 0.01,
                                  'Attribute::Handlers' => 0,
                                  'Hook::LexWrap'       => 0,
-                                 'PadWalker'           => 0.05,
+                                 'Devel::Caller'       => 0.02,
+                                 ($] >= 5.007002 ?
+                                  ('PadWalker'         => 0.05)
+                                  : ()),
                                 },
              );
 
-use Config;
-use File::Spec::Functions;
 sub MY::postamble {
-    my $perl     = $Config{perlpath};
-    my $pod2text = catfile($Config{bin}, "pod2text");
     return <<EOF
 README: $module
-\t$perl $pod2text $module > README
+\tpod2text $module > README
 EOF
 }

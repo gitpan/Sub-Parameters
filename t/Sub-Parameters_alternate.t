@@ -46,17 +46,13 @@ is($out, "start\nmore\nmiddle\nend\n", "doesn't linger (attribute)");
 
 sub quux :WantParam(positional) {
     Param( my $foo = 'rw' );
+    Param( my @bar = 'rw' );
+    Param( my @baz );
 
-SKIP: {
-        skip( 'alternative @', 2 );
-        Param( my @bar = 'rw' );
-        Param( my @baz );
-
-        is_deeply( \@bar, [qw( foo bar )], "pass @ rw" );
-        is_deeply( \@baz, [qw( foo bar )], "pass @" );
-        @bar = qw( quux zed );
-        @baz = qw( quux zed );
-    }
+    is_deeply( \@bar, [qw( foo bar )], "pass @ rw" );
+    is_deeply( \@baz, [qw( foo bar )], "pass @" );
+    @bar = qw( quux zed );
+    @baz = qw( quux zed );
     $foo = 'baz';
 }
 
@@ -67,19 +63,13 @@ my @baz = qw( foo bar );
 quux($foo, \@bar, \@baz);
 
 is( $foo, 'baz', "readwrite" );
-SKIP: {
-    skip( "readwrite @", 1 );
-    is_deeply( \@bar, [qw( quux zed )], "readwrite @" );
-}
+is_deeply( \@bar, [qw( quux zed )], "readwrite @" );
 is_deeply( \@baz, [qw( foo bar  )], "copy @" );
 
-SKIP: {
-    skip( "mistype", 1 );
+sub wrong_type : WantParam { Param( my %hash ) }
+  eval { wrong_type([]) };
+like( $@, qr/^can't assign non-hashref to '%hash' at/, "trap mistype" );
 
-    sub wrong_type : WantParam { Param( my %hash ) }
-    eval { wrong_type([]) };
-    like( $@, qr/^can't assign non-hashref to '%hash' at/, "trap mistype" );
-}
 
 sub wrong_nodecoration { Param( my $foo ) }
 eval { wrong_nodecoration() };
